@@ -97,6 +97,25 @@ func TestReadWriteJSONL(t *testing.T) {
 	}
 }
 
+func TestReadJSONLWithoutTrailingNewline(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "actions.jsonl")
+	input := "{\"spec\":\"actions/checkout@v4\",\"metadata\":{}}\n" +
+		"{\"spec\":\"actions/setup-go@v5\",\"metadata\":{}}"
+	if err := os.WriteFile(file, []byte(input), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := newGen(io.Discard, io.Discard, io.Discard).readJSONL(file)
+	if err != nil {
+		t.Fatalf("readJSONL() error = %v", err)
+	}
+	for _, spec := range []string{"actions/checkout@v4", "actions/setup-go@v5"} {
+		if _, ok := got[spec]; !ok {
+			t.Errorf("readJSONL() omitted final or preceding record %q", spec)
+		}
+	}
+}
+
 func TestWriteGoToStdout(t *testing.T) {
 	testCases := []struct {
 		in   string
