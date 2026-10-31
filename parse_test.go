@@ -6,6 +6,62 @@ import (
 	"testing"
 )
 
+func TestParseContainerPortsAndVolumes(t *testing.T) {
+	input := []byte(`on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3
+      ports:
+        - "8080:80"
+      volumes:
+        - "/tmp:/tmp"
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - "6379:6379"
+        volumes:
+          - "/data:/data"
+    steps:
+      - run: echo hello
+`)
+
+	wf, errs := Parse(input)
+	if len(errs) != 0 {
+		t.Fatalf("unexpected parse errors: %v", errs)
+	}
+
+	job := wf.Jobs["test"]
+	if job == nil {
+		t.Fatal("job was not parsed")
+	}
+
+	assertContainer := func(name string, c *Container, wantPort, wantVolume string) {
+		t.Helper()
+		if c == nil {
+			t.Fatalf("%s container was not parsed", name)
+		}
+		if len(c.Ports) != 1 || c.Ports[0].Value != wantPort {
+			t.Errorf("%s ports = %v, want [%q]", name, c.Ports, wantPort)
+		}
+		if len(c.Volumes) != 1 || c.Volumes[0].Value != wantVolume {
+			t.Errorf("%s volumes = %v, want [%q]", name, c.Volumes, wantVolume)
+		}
+	}
+
+	assertContainer("job", job.Container, "8080:80", "/tmp:/tmp")
+	if job.Services == nil {
+		t.Fatal("services were not parsed")
+	}
+	redis := job.Services.Value["redis"]
+	if redis == nil {
+		t.Fatal("redis service was not parsed")
+	}
+	assertContainer("service", redis.Container, "6379:6379", "/data:/data")
+}
+
 func BenchmarkParseWorkflow(b *testing.B) {
 	type bench struct {
 		name  string
